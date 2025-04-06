@@ -4,6 +4,7 @@ import httpx
 import pandas as pd
 import io
 from typing import List, Optional
+import json
 
 router = APIRouter()
 
@@ -14,13 +15,14 @@ chat_history = [
         "role": "system",
         "content": (
             "Você é um analista de dados. Receberá tabelas (em texto), Responda sempre em português (pt-BR), "
-            "e deve fornecer insights úteis e claros. Seja direto, identifique padrões, médias, totais ou anomalias."
-            "vou enviar a tabela abaixo:"
+            "responda apenas com os nomes das colunas relevantes para gerar o gráfico ou análise. "
+            "Formate a resposta como um JSON. No formato: ['nome coluna', 'nome coluna']"
         ),
     },
 ]
 
-dataFrame = None
+df_global: Optional[pd.DataFrame] = None
+
 
 class ChatRequest(BaseModel):
     message: str
@@ -51,6 +53,8 @@ async def chat(request: ChatRequest):
 
 @router.post("/upload-spreadsheet")
 async def upload_spreadsheet(file: UploadFile = File(...), range: Optional[str] = None):
+    global df_global
+
     content = await file.read()
 
     try:
@@ -79,49 +83,55 @@ async def upload_spreadsheet(file: UploadFile = File(...), range: Optional[str] 
             }
 
     limited_df = df.iloc[start:end]
-    dataFrame = limited_df.to_string(index=False)
+    df_global = limited_df.to_string(index=False)
 
     return {
         "message": "Arquivo recebido e analisado. Pronto para perguntas.",
-        "preview": dataFrame,
+        "preview": df_global,
         "instructions": "Agora envie uma pergunta como: 'Gere um gráfico dos macronutrientes'",
     }
 
 
 @router.post("/processdata")
 async def processData():
+    global df_global
 
     # Prompt
     prompt = f"""
-    
     Quero gerar um grafico sobre os macro nutrientes, quais colunas eu envio para meu grafico?
+    
     Tabela:
-    {dataFrame}
+    {df_global}
     """
-
+    
     # History
     chat_history.append({"role": "user", "content": prompt})
 
     async with httpx.AsyncClient(timeout=60.0) as client:
         res = await client.post(
             OLLAMA_URL,
-            json={"model": "llama3:8b", "messages": chat_history, "stream": False},
+            json={
+                "model": "llama3:8b",
+                "messages": chat_history,
+                "stream": False,
+            },
         )
         data = res.json()
 
     response = data.get("message", {}).get("content", "")
+    print(response)
 
     try:
-        colunas = eval(response)  # cuidado com segurança aqui
+        colunas = json.loads(response)  # cuidado com segurança aqui
     except Exception:
         return {
             "error": "Não foi possível interpretar as colunas retornadas pela IA",
             "resposta_bruta": response,
         }
-        
-    gerar_grafico(colunas)
 
     chat_history.append({"role": "assistant", "content": response})
+    
+    gerar_grafico(colunas)
 
     return {
         "mensagem": f"Gráfico solicitado com base nas colunas: {colunas}",
@@ -130,4 +140,4 @@ async def processData():
 
 
 def gerar_grafico(colunas: list[str]):
-    pass
+    print(colunas)
