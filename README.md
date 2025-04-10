@@ -25,7 +25,7 @@ A aplicação web permitirá:
 ### Arquitetura
 **API RESTful** baseada em uma **Arquitetura em Camadas**:
 
-![image](https://github.com/user-attachments/assets/55ad0724-92ff-46ed-bb29-fb68df588d26)
+![image](https://github.com/user-attachments/assets/45ce23d2-58b8-4c64-b1b7-435f6d9a657f)
 
 
 
