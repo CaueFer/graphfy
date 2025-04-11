@@ -101,7 +101,12 @@ async def upload_spreadsheet(file: UploadFile = File(...), range: Optional[str] 
 
         return {
             "message": "Arquivo recebido e analisado. Pronto para perguntas.",
-            "instructions": "Agora envie uma pergunta como: 'Gerar um gráfico dos macronutrientes'",
+            "instructions": f"""Agora envie uma pergunta como:\n
+            - Gerar um gráfico dos macronutrientes\n
+            - Mostrar um gráfico com a evolução dos gastos mensais\n
+            - Criar um gráfico de barras com a quantidade de participantes por evento\n
+            - Gerar um gráfico de linha com o progresso das metas semanais
+            """,
             "success": True,
         }
     except Exception as e:
