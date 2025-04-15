@@ -69,14 +69,17 @@ async def upload_spreadsheet(
         return {"error": f"Erro ao enviar o arquivo: {str(e)}"}
 
 
-class ChatRequest(BaseModel):
+class ChatStreamRequest(BaseModel):
     prompt: str
     sessionId: str
 
+
 @router.post("/start-chat")
-async def start_chat(chatRequest: ChatRequest):
+async def start_chat(body: ChatStreamRequest):
     try:
-        prompt, sessionId = chatRequest
+        prompt = body.prompt
+        sessionId = body.sessionId
+
         return await start_chat_service(prompt, sessionId)
     except Exception as e:
         return {"error": f"Erro ao iniciar chat: {str(e)}"}

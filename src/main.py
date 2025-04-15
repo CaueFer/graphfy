@@ -24,30 +24,29 @@ async def start_chat_service(prompt: str, sessionId: str):
 
 async def manager(prompt: str, sessionId: str):
     try:
-        yield f"data: {json.dumps({'status': 'Planilha recebida, processando dados...'})}\n\n"
-        responseProcess = await processData(prompt)
+        yield json.dumps({"status": "Planilha recebida, processando dados..."}) + "\n\n"
+        responseProcess = await processData(prompt, sessionId)
 
         if responseProcess["error"] is not None:
-            yield f"data: {json.dumps({'error': responseProcess['error']})}\n\n"
+            yield json.dumps({"error": responseProcess["error"]}) + "\n\n"
             return
 
         if responseProcess["success"] is True:
             colunas = responseProcess["colunas"]
-            yield f"data: {json.dumps({'status': 'Dados processados, gerando gráfico...'})}\n\n"
-
+            yield json.dumps({"status": "Dados processados, gerando gráfico..."}) + "\n\n"
         responseGraficos = await gera_grafico(colunas)
 
         if responseGraficos["error"] is not None:
-            yield f"data: {json.dumps({'error': responseGraficos['error']})}\n\n"
+            yield json.dumps({"error": responseGraficos["error"]}) + "\n\n"
             return
 
         if responseGraficos["success"] is True:
-            yield f"data: {json.dumps({'status': 'Gráfico gerado com sucesso!'})}\n\n"
-            yield f"data: {json.dumps({'graphValues': responseGraficos['graphValues']})}\n\n"
+            yield json.dumps({"status": "Gráfico gerado com sucesso!"}, {"success": True}) + "\n\n"
+            yield json.dumps({"graphValues": responseGraficos["graphValues"]}) + "\n\n" 
             return
 
     except Exception as e:
-        yield f"data: {json.dumps({'error': f'Erro gerenciar: {str(e)}'})}"
+        yield json.dumps({"error": f"Erro gerenciar: {str(e)}"}) + "\n\n"
         return
 
 

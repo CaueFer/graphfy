@@ -1,21 +1,35 @@
 from dotenv import load_dotenv
+from pathlib import Path
 import os
 import json
 import httpx
+
+from lib.default_constants import tempDf
 
 load_dotenv()
 OLLAMA_URL = os.getenv("OLLAMA_URL")
 
 
-async def processData(prompt: str):
-    global df_global
+async def processData(prompt: str, sessionId: str):
+    path = Path(f"{tempDf}{sessionId}.txt")
+    path = path.resolve()
+
+    print(path)
+    if path.exists() is False:
+        return {
+            "error": "Planilha nao encontrada.",
+            "resposta_bruta": None,
+            "success": False,
+        }
+
+    userTable = path.read_text()
 
     # Prompt
     prompt = f"""
     prompt: {prompt}
     
     Tabela:
-    {df_global}
+    {userTable}
     """
 
     # History
@@ -27,7 +41,7 @@ async def processData(prompt: str):
             json={
                 "model": "llama3:8b",
                 "messages": chat_history,
-                "stream": False,
+                "stream": True,
             },
         )
         data = res.json()
@@ -40,6 +54,7 @@ async def processData(prompt: str):
         return {
             "error": "Não foi possível interpretar as colunas retornadas pela IA",
             "resposta_bruta": response,
+            "success": False,
         }
 
     # History
