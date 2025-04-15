@@ -8,8 +8,8 @@ from dotenv import load_dotenv
 import httpx
 import os
 
-from main import start_chat_service
-from main import upload_spreadsheet_service
+from data.services.management import start_chat_service
+from data.services.management import upload_spreadsheet_service
 
 
 load_dotenv()
