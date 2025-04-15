@@ -11,7 +11,7 @@ from graph.generator import gera_grafico
 from data.process import processData
 
 
-async def start_chat_service(prompt: str, sessionId: int):
+async def start_chat_service(prompt: str, sessionId: str):
     try:
         if sessionId is None:
             return {"error": f"SessionId inválido"}
@@ -22,7 +22,7 @@ async def start_chat_service(prompt: str, sessionId: int):
         return {"error": f"Erro ao iniciar chat: {str(e)}"}
 
 
-async def manager(prompt: str, sessionId: int):
+async def manager(prompt: str, sessionId: str):
     try:
         yield f"data: {json.dumps({'status': 'Planilha recebida, processando dados...'})}\n\n"
         responseProcess = await processData(prompt)
@@ -99,7 +99,7 @@ async def upload_spreadsheet_service(
 
         if path.exists():
             return {
-                "message": "Arquivo recebido e analisado. Pronto para perguntas.",
+                "message": "Arquivo recebido e analisado. Pronto para perguntas.\n ",
                 "instructions": "\n".join(
                     [
                         "Agora envie uma pergunta como: ",
@@ -111,7 +111,7 @@ async def upload_spreadsheet_service(
                 ),
                 "success": True,
             }
-            
+
         return {
             "message": "Erro ao receber o arquivo.",
             "instructions": None,
