@@ -5,14 +5,12 @@ router = APIRouter()
 from typing import Optional
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from pathlib import Path
-import pandas as pd
 import httpx
-import io
 import os
 
-from main import start_chat_stream
-from lib.default_constants import tempDf
+from main import start_chat_service
+from main import upload_spreadsheet_service
+
 
 load_dotenv()
 OLLAMA_URL = os.getenv("OLLAMA_URL")
@@ -58,59 +56,27 @@ async def chat(request: ChatRequest):
 
 
 @router.post("/upload-spreadsheet")
-async def upload_spreadsheet(file: UploadFile = File(...), range: Optional[str] = Form(None), sessionId: str = Form(None)):
+async def upload_spreadsheet(
+    file: UploadFile = File(...),
+    range: Optional[str] = Form(..., alias="range"),
+    sessionId: str = Form(..., alias="sessionId"),
+):
     try:
-        if file is None:
-            return {"error": f"Arquivo inválido."}
-        
-        if sessionId is None:
-            return {"error": f"SessionId inválido."}
-
-        content = await file.read()
-
-        if file.filename.endswith(".csv"):
-            df = pd.read_csv(io.BytesIO(content))
-        elif file.filename.endswith((".xls", ".xlsx")):
-            df = pd.read_excel(io.BytesIO(content))
-   
-
-        if df.empty:
-            return {"error": "O arquivo está vazio."}
-
-        if range is None:
-            start, end = 0, 20  # Padrão: primeiras 20 linhas
-        else:
-            try:
-                start_str, end_str = range.split(",")
-                start = int(start_str.strip())
-                end = int(end_str.strip())
-                if start >= end:
-                    return {"error": "O valor do intervalo 'inicial' deve ser menor que 'final'."}
-            except ValueError:
-                return {"error": "O parâmetro 'intervalo' inválido."}
-
-        limited_df =  df.iloc[start:end]  # [linhas, colunas] - so to passando linhas
-        dataframe =  limited_df.to_string(index=False)
-        
-        path = Path(f"{tempDf}{sessionId}.txt")
-        path = path.resolve()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        
-        with open(path, "w") as f:
-            f.write(dataframe)
-
-        return {
-            "message": "Arquivo recebido e analisado. Pronto para perguntas.",
-            "instructions": "Agora envie uma pergunta como: 'Gerar um gráfico dos macronutrientes'",
-            "success": True,
-        }
+        response = await upload_spreadsheet_service(file, range, sessionId)
+        return response
     except Exception as e:
-        return {"error": f"Erro ao ler o arquivo: {str(e)}"}
+        print(f"Erro em upload-spreadsheet: {str(e)}")
+        return {"error": f"Erro ao enviar o arquivo: {str(e)}"}
 
+
+class ChatRequest(BaseModel):
+    prompt: str
+    sessionId: str
 
 @router.post("/start-chat")
-async def start_chat(prompt: str, sessionId: int):
+async def start_chat(chatRequest: ChatRequest):
     try:
-        return await start_chat_stream(prompt, sessionId)
+        prompt, sessionId = chatRequest
+        return await start_chat_service(prompt, sessionId)
     except Exception as e:
         return {"error": f"Erro ao iniciar chat: {str(e)}"}
