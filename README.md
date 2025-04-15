@@ -25,7 +25,13 @@ A aplicação web permitirá:
 ### Arquitetura
 **API RESTful** baseada em uma **Arquitetura em Camadas**:
 
-![image](https://github.com/user-attachments/assets/45ce23d2-58b8-4c64-b1b7-435f6d9a657f)
+- **Monolítica**, por baixo custo e tempo para desenvolvimento.
+- Divisão em camadas:
+  - **Front-end:** Interface interativa para usuários.
+  - **Back-end:** Processamento de lógica de negócios.
+  - **Banco de Dados:** Persistência das informações.
+
+![image](https://github.com/user-attachments/assets/ea1bc5d0-935e-421a-86e9-3a4034f7ce4a)
 
 
 
@@ -65,5 +71,9 @@ A aplicação web permitirá:
 ### Infraestrutura
 - **Front-end**: Vercel
 - **Back-end**: Railway
-- **Banco de Dados**:Railway
+- **Banco de Dados**: Railway
+
+### Repositório
+
+  Github - graphfy v1.3
 
