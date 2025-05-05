@@ -1,5 +1,4 @@
 from dotenv import load_dotenv
-from tortoise import Tortoise
 from pathlib import Path
 import os
 import json
