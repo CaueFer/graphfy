@@ -1,6 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from tortoise.contrib.fastapi import register_tortoise
+from tortoise.exceptions import ConfigurationError, OperationalError
+
+import sys
+
+sys.pycache_prefix = "../__pycache__"
 
 from routes import router
 
