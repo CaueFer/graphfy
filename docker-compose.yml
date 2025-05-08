@@ -3,7 +3,7 @@ services:
   postgres:
     image: postgres:16
     container_name: graphfy_db
-    restart: always
+    restart: on-failure:3
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: 123456
