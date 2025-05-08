@@ -18,9 +18,11 @@ def create_token(data: dict) -> str:
     return encoded_jwt
 
 
-def verify_token(token: str) -> Optional[dict]:
+def verify_token(token: str) -> bool:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
+        if payload:
+            return True
+        return False
     except JWTError:
         return None

@@ -1,18 +1,19 @@
-from fastapi import File, Form, UploadFile
-from fastapi.responses import StreamingResponse
-from tortoise import Tortoise
-from typing import Optional
-from pathlib import Path
-import pandas as pd
-import asyncio
-import json
-import io
+from dotenv import load_dotenv
 
+from fastapi.responses import StreamingResponse
+from pathlib import Path
+from typing import List
+import httpx
+import json
+import os
+
+from chat.chat_db import insert_mensagem_db, get_mensagens_db
 from graph.services.generator import gera_grafico
-from data.services.process import process_data_service
 from lib.default_constants import tempDf
 from db.models.chat_model import Chat
 
+load_dotenv()
+OLLAMA_URL = os.getenv("OLLAMA_URL")
 
 async def start_chat_service(prompt: str, sessionId: str):
     try:
@@ -74,51 +75,17 @@ async def manager(prompt: str, sessionId: str, chat_id: int):
         return
 
 
-async def upload_spreadsheet_service(
-    file: UploadFile = File(...),
-    range: Optional[str] = Form(None),
-    sessionId: str = Form(None),
-):
+async def upload_spreadsheet_service(worksheetRange: List[str]):
     try:
-        if file is None:
-            return {"error": f"Arquivo inválido."}
+        if worksheetRange is None:
+            return {"error": f"Dados planilha inválidos."}
 
-        if sessionId is None:
-            return {"error": f"SessionId inválido."}
-
-        content = await file.read()
-
-        if file.filename.endswith(".csv"):
-            df = pd.read_csv(io.BytesIO(content))
-        elif file.filename.endswith((".xls", ".xlsx")):
-            df = pd.read_excel(io.BytesIO(content))
-
-        if df.empty:
-            return {"error": "O arquivo está vazio."}
-
-        if range is None:
-            start, end = 0, 20  # Padrão: primeiras 20 linhas
-        else:
-            try:
-                start_str, end_str = range.split(",")
-                start = int(start_str.strip())
-                end = int(end_str.strip())
-                if start >= end:
-                    return {
-                        "error": "O valor do intervalo 'inicial' deve ser menor que 'final'."
-                    }
-            except ValueError:
-                return {"error": "O parâmetro 'intervalo' inválido."}
-
-        limited_df = df.iloc[start:end]  # [linhas, colunas] - so to passando linhas
-        dataframe = limited_df.to_string(index=False)
-
-        path = Path(f"{tempDf}{sessionId}.txt")
+        path = Path(f"{tempDf}{chatId}.txt")
         path = path.resolve()
         path.parent.mkdir(parents=True, exist_ok=True)
 
         with open(path, "w") as f:
-            f.write(dataframe)
+            f.write(worksheetRange)
 
         if path.exists():
             return {
@@ -143,3 +110,76 @@ async def upload_spreadsheet_service(
 
     except Exception as e:
         return {"error": f"Erro ao ler o arquivo: {str(e)}"}
+
+
+async def process_data_service(prompt: str, sessionId: str, chat_id: int):
+    path = Path(f"{tempDf}{sessionId}.txt")
+    path = path.resolve()
+
+    if path.exists() is False:
+        return {
+            "error": "Planilha nao encontrada.",
+            "resposta_bruta": None,
+            "success": False,
+        }
+
+    userTable = path.read_text()
+
+    # Prompt
+    prompt = f"""
+    prompt: {prompt}
+    
+    Tabela:
+    {userTable}
+    """
+
+    # History
+    total, rows = await get_mensagens_db(chat_id)
+
+    if rows:
+        chat_history = [dict(row) for row in rows]
+    else:
+        chat_history = []
+
+    mensagem_dict = {"role": "user", "content": prompt}
+    chat_history.append(mensagem_dict)
+    await insert_mensagem_db(chat_id, json.dumps(mensagem_dict))
+
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            res = await client.post(
+                OLLAMA_URL,
+                json={
+                    "model": "llama3:8b",
+                    "messages": chat_history,
+                    "stream": True,
+                },
+            )
+            data = res.json()
+            print(data)
+        response = data.get("message", {}).get("content", "")
+    except Exception:
+        return {
+            "error": "Erro conexão com llama",
+            "success": False,
+        }
+
+    print(response)
+    try:
+        colunas = json.loads(response)
+    except Exception:
+        return {
+            "error": "Não foi possível interpretar as colunas retornadas pela IA",
+            "resposta_bruta": response,
+            "success": False,
+        }
+
+    # History
+    mensagem_dict = {"role": "assistant", "content": response}
+    resposta = json.dumps(mensagem_dict)
+    await insert_mensagem_db(chat_id, resposta)
+
+    return {
+        "success": True,
+        "colunas": colunas,
+    }
