@@ -21,7 +21,7 @@ async def login_service(email: str, password: str) -> str:
     return access_token
 
 async def signup_service(username: str, email: str, password: str):
-        existing_user = await User.filter(email).first()
+        existing_user = await User.filter(email=email).first()
         if existing_user:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
