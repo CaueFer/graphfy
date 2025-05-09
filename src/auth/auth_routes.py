@@ -30,6 +30,7 @@ async def signup_user(request: SignupRequest):
 
         return {
             "message": "Usuário Criado com Sucesso",
+            "token": newUser.token,
             "user": {"id": newUser.id, "email": newUser.email},
         }
     except IntegrityError:

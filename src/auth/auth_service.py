@@ -17,7 +17,9 @@ async def login_service(email: str, password: str) -> str:
             detail="Email ou senha inválidas",
         )
 
-    access_token = create_token(data={"sub": user.email})
+    access_token = create_token(
+        data={"user": {"id": user.id, "username": user.username, "email": user.email}}
+    )
 
     return access_token
 
@@ -36,5 +38,16 @@ async def signup_service(username: str, email: str, password: str):
     )
 
     newUser = await User_Pydantic.from_tortoise_orm(queryTortoise)
+
+    access_token = create_token(
+        data={
+            "user": {
+                "id": newUser.id,
+                "username": newUser.username,
+                "email": newUser.email,
+            }
+        }
+    )
+    newUser = {**newUser, "token": access_token}
 
     return newUser
