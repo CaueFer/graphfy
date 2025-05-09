@@ -1,11 +1,11 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from pydantic import BaseModel
 from typing import List
 
 from chat.chat_services import upload_spreadsheet_service
-from lib.helpers.jwt_helper import verify_token
+from lib.helpers.jwt_helper import verify_token, verify_token_from_http
 
-chatRouter = APIRouter()
+chatRouter = APIRouter(dependencies=[Depends(verify_token_from_http)])
 
 
 # UPLOAD SPREADSHEET
@@ -13,13 +13,14 @@ class UploadSpreadsheetRequest(BaseModel):
     worksheetRange: List[str]
     token: str
 
+
 @chatRouter.post("/upload-spreadsheet")
-async def upload_spreadsheet(
-    body: UploadSpreadsheetRequest
-):  
+async def upload_spreadsheet(body: UploadSpreadsheetRequest):
     try:
         if verify_token(token=body.token):
-            response = await upload_spreadsheet_service(worksheetRange=body.worksheetRange)
+            response = await upload_spreadsheet_service(
+                worksheetRange=body.worksheetRange
+            )
             return response
 
         raise HTTPException(
