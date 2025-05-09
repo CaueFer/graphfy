@@ -12,7 +12,7 @@ class User(Model):
     updated_at = fields.DatetimeField(auto_now=True)
 
     class Meta:
-        table = "users"
+        table = "user"
 
     def __str__(self):
         return self.email
