@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import os
 
 security = HTTPBearer()
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "segredo_default")
+SECRET_KEY = os.getenv("JWT_SECRET", "segredo_default")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24  # 1 DIA
 
@@ -20,12 +20,10 @@ def create_token(data: dict) -> str:
     return encoded_jwt
 
 
-def verify_token(token: str) -> bool:
+def verify_token(token: str):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        if payload:
-            return True
-        return False
+        return payload
     except JWTError:
         return None
 
@@ -35,8 +33,9 @@ def verify_token_from_http(
 ):
     token = credentials.credentials
     try:
+        print(token)
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
+        return payload  # preciso retornar um valor - nao pode ser true ou false
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

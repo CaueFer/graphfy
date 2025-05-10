@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from fastapi.responses import StreamingResponse
 from pathlib import Path
 from typing import List
+from uuid import UUID
 import httpx
 import json
 import os
@@ -10,10 +11,11 @@ import os
 from chat.chat_db import insert_mensagem_db, get_mensagens_db
 from graph.services.generator import gera_grafico
 from lib.default_constants import tempDf
-from db.models.chat_model import Chat
+from db.models.chat_model import Chat, Mensagem
 
 load_dotenv()
 OLLAMA_URL = os.getenv("OLLAMA_URL")
+
 
 async def start_chat_service(prompt: str, sessionId: str):
     try:
@@ -75,17 +77,22 @@ async def manager(prompt: str, sessionId: str, chat_id: int):
         return
 
 
-async def upload_spreadsheet_service(worksheetRange: List[str]):
+async def upload_spreadsheet_service(worksheetRange: List[str], user_id: str):
     try:
         if worksheetRange is None:
             return {"error": f"Dados planilha inválidos."}
 
-        path = Path(f"{tempDf}{chatId}.txt")
+        chat = await Chat.create(user_id=user_id)
+
+        path = Path(f"{tempDf}{chat.id}.txt")
         path = path.resolve()
         path.parent.mkdir(parents=True, exist_ok=True)
 
+        worksheetString = ", ".join(worksheetRange)
         with open(path, "w") as f:
-            f.write(worksheetRange)
+            f.write(
+                worksheetString
+            )  # preciso passar obrigatorio como string para o write funfar
 
         if path.exists():
             return {
@@ -100,12 +107,14 @@ async def upload_spreadsheet_service(worksheetRange: List[str]):
                     ]
                 ),
                 "success": True,
+                "chat_id": chat.id,
             }
 
         return {
             "message": "Erro ao receber o arquivo.",
             "instructions": None,
             "success": False,
+            "chat_id": None,
         }
 
     except Exception as e:
@@ -183,3 +192,16 @@ async def process_data_service(prompt: str, sessionId: str, chat_id: int):
         "success": True,
         "colunas": colunas,
     }
+
+
+async def get_chat_service(chat_id: str):
+    chat_id_uuid = UUID(chat_id)
+    chat = await Chat.filter(id=chat_id_uuid).first()
+
+    return chat
+
+
+async def get_chat_messages_service(chat_id: str):
+    msgs = await Mensagem.filter(chat_id=chat_id).order_by("-created_at").limit(15)
+
+    return msgs
