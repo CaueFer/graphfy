@@ -7,12 +7,36 @@ from chat.chat_services import (
     get_chat_service,
     get_chat_messages_service,
     get_user_chats_service,
+    delete_chat_service,
 )
 from lib.helpers.jwt_helper import verify_token, verify_token_from_http
 
 chatRouter = APIRouter(dependencies=[Depends(verify_token_from_http)])
 
 
+# ========== GET
+class GetUserChatsRequest(BaseModel):
+    user_id: str
+
+
+@chatRouter.get("/get-user-chats")
+async def get_user_chats(request: GetUserChatsRequest = Depends()):
+    try:
+        user_id = request.user_id
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Id do usuário inválido.",
+            )
+        chats = await get_user_chats_service(user_id)
+
+        return {"chats": chats}
+    except Exception as e:
+        print("Erro em getUserChats: ", e)
+        return {"error": f"Erro em receber mensagens do chat."}
+
+
+# ========== POST
 # UPLOAD SPREADSHEET
 class UploadSpreadsheetRequest(BaseModel):
     worksheetRange: List[str]
@@ -96,22 +120,18 @@ async def get_chat_messages(body: GetChatRequest):
         return {"error": f"Erro em receber mensagens do chat."}
 
 
-class GetUserChatsRequest(BaseModel):
-    user_id: str
-
-
-@chatRouter.get("/get-user-chats")
-async def get_user_chats(request: GetUserChatsRequest = Depends()):
+# ========== DELETE
+@chatRouter.delete("")
+async def delete_chat(chat_id: str = Query(...)):
     try:
-        user_id = request.user_id
-        if user_id is None:
+        if chat_id is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Id do usuário inválido.",
+                detail="Id do chat inválido.",
             )
-        chats = await get_user_chats_service(user_id)
+        await delete_chat_service(chat_id)
 
-        return {"chats": chats}
+        return {"message": "Chat deletado com sucesso!", "success": True}
     except Exception as e:
         print("Erro em getUserChats: ", e)
         return {"error": f"Erro em receber mensagens do chat."}

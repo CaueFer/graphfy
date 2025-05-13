@@ -17,6 +17,25 @@ load_dotenv()
 OLLAMA_URL = os.getenv("OLLAMA_URL")
 
 
+async def get_chat_service(chat_id: str):
+    chat_id_uuid = UUID(chat_id)
+    chat = await Chat.filter(id=chat_id_uuid).first()
+
+    return chat
+
+
+async def get_chat_messages_service(chat_id: str):
+    msgs = await Mensagem.filter(chat_id=chat_id).order_by("-created_at").limit(15)
+
+    return msgs
+
+
+async def get_user_chats_service(user_id: str):
+    chats = await Chat.filter(user_id=user_id).order_by("-created_at")
+
+    return chats
+
+
 async def start_chat_service(prompt: str, sessionId: str):
     try:
         if sessionId is None:
@@ -83,7 +102,9 @@ async def upload_spreadsheet_service(worksheetRange: List[str], user_id: str):
             return {"error": f"Dados planilha inválidos."}
 
         chat_count = await Chat.filter(user_id=int(user_id)).count()
-        chat = await Chat.create(user_id=int(user_id), name=f"Nova Conversa {chat_count + 1}")
+        chat = await Chat.create(
+            user_id=int(user_id), name=f"Nova Conversa {chat_count + 1}"
+        )
 
         path = Path(f"{tempDf}{chat.id}.txt")
         path = path.resolve()
@@ -203,20 +224,11 @@ async def process_data_service(prompt: str, sessionId: str, chat_id: int):
     }
 
 
-async def get_chat_service(chat_id: str):
+async def delete_chat_service(chat_id: str):
+    path = Path(f"{tempDf}{chat_id}.txt")
+    path = path.resolve()
+    if path.exists():
+        path.unlink()
+
     chat_id_uuid = UUID(chat_id)
-    chat = await Chat.filter(id=chat_id_uuid).first()
-
-    return chat
-
-
-async def get_chat_messages_service(chat_id: str):
-    msgs = await Mensagem.filter(chat_id=chat_id).order_by("-created_at").limit(15)
-
-    return msgs
-
-
-async def get_user_chats_service(user_id: str):
-    chats = await Chat.filter(user_id=user_id).order_by("-created_at")
-
-    return chats
+    await Chat.filter(id=chat_id_uuid).delete()
