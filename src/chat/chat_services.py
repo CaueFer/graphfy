@@ -9,9 +9,9 @@ import json
 import os
 
 from chat.chat_db import insert_mensagem_db, get_mensagens_db
+from db.models.chat_model import Chat, Mensagem, Role
 from graph.services.generator import gera_grafico
 from lib.default_constants import tempDf
-from db.models.chat_model import Chat, Mensagem
 
 load_dotenv()
 OLLAMA_URL = os.getenv("OLLAMA_URL")
@@ -82,7 +82,8 @@ async def upload_spreadsheet_service(worksheetRange: List[str], user_id: str):
         if worksheetRange is None:
             return {"error": f"Dados planilha inválidos."}
 
-        chat = await Chat.create(user_id=user_id)
+        chat_count = await Chat.filter(user_id=int(user_id)).count()
+        chat = await Chat.create(user_id=int(user_id), name=f"Nova Conversa {chat_count + 1}")
 
         path = Path(f"{tempDf}{chat.id}.txt")
         path = path.resolve()
@@ -95,24 +96,32 @@ async def upload_spreadsheet_service(worksheetRange: List[str], user_id: str):
             )  # preciso passar obrigatorio como string para o write funfar
 
         if path.exists():
-            return {
-                "message": "Arquivo recebido e analisado. Pronto para perguntas.\n ",
-                "instructions": "\n".join(
-                    [
-                        "Agora envie uma pergunta como: ",
-                        "- Gerar um gráfico dos macronutrientes ",
-                        "- Mostrar um gráfico com a evolução dos gastos mensais ",
-                        "- Criar um gráfico de barras com a quantidade de participantes por evento ",
-                        "- Gerar um gráfico de linha com o progresso das metas semanais ",
-                    ]
+            msg = Mensagem(
+                chat_id=chat.id,
+                content=(
+                    "Arquivo recebido e analisado. Pronto para perguntas.\n\n"
+                    + "\n".join(
+                        [
+                            "Agora envie uma pergunta como:",
+                            "- Gerar um gráfico dos macronutrientes",
+                            "- Mostrar um gráfico com a evolução dos gastos mensais",
+                            "- Criar um gráfico de barras com a quantidade de participantes por evento",
+                            "- Gerar um gráfico de linha com o progresso das metas semanais",
+                        ]
+                    )
                 ),
+                role=Role.system,
+                name="initial message",
+            )
+
+            await msg.save()
+
+            return {
                 "success": True,
                 "chat_id": chat.id,
             }
 
         return {
-            "message": "Erro ao receber o arquivo.",
-            "instructions": None,
             "success": False,
             "chat_id": None,
         }
@@ -205,3 +214,9 @@ async def get_chat_messages_service(chat_id: str):
     msgs = await Mensagem.filter(chat_id=chat_id).order_by("-created_at").limit(15)
 
     return msgs
+
+
+async def get_user_chats_service(user_id: str):
+    chats = await Chat.filter(user_id=user_id).order_by("-created_at")
+
+    return chats

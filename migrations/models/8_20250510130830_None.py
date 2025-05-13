@@ -29,7 +29,8 @@ CREATE TABLE IF NOT EXISTS "mensagem" (
     "role" VARCHAR(20) NOT NULL,
     "name" VARCHAR(255),
     "chat_id" UUID NOT NULL REFERENCES "chat" ("id") ON DELETE CASCADE
-);"""
+);
+COMMENT ON COLUMN "mensagem"."role" IS 'system: system\nuser: user\nassistant: assistant\nfunction: function\ndata: data\ntool: tool\nerror: error\nloading: loading';"""
 
 
 async def downgrade(db: BaseDBAsyncClient) -> str:

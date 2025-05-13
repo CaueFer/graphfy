@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, status, Depends, Request
+from fastapi import APIRouter, HTTPException, status, Depends, Request, Query
 from pydantic import BaseModel
 from typing import List
 
@@ -6,6 +6,7 @@ from chat.chat_services import (
     upload_spreadsheet_service,
     get_chat_service,
     get_chat_messages_service,
+    get_user_chats_service,
 )
 from lib.helpers.jwt_helper import verify_token, verify_token_from_http
 
@@ -78,8 +79,9 @@ async def get_chat(body: GetChatRequest):
         return {"success": True}
 
     except Exception as e:
-        print("Erro em inicializar chat: ",e)
+        print("Erro em inicializar chat: ", e)
         return {"error": f"Erro em inicializar chat."}
+
 
 @chatRouter.post("/get-chat-messages")
 async def get_chat_messages(body: GetChatRequest):
@@ -91,4 +93,25 @@ async def get_chat_messages(body: GetChatRequest):
         return {"msgs": msgs}
 
     except Exception as e:
+        return {"error": f"Erro em receber mensagens do chat."}
+
+
+class GetUserChatsRequest(BaseModel):
+    user_id: str
+
+
+@chatRouter.get("/get-user-chats")
+async def get_user_chats(request: GetUserChatsRequest = Depends()):
+    try:
+        user_id = request.user_id
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Id do usuário inválido.",
+            )
+        chats = await get_user_chats_service(user_id)
+
+        return {"chats": chats}
+    except Exception as e:
+        print("Erro em getUserChats: ", e)
         return {"error": f"Erro em receber mensagens do chat."}

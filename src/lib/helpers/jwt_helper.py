@@ -33,7 +33,6 @@ def verify_token_from_http(
 ):
     token = credentials.credentials
     try:
-        print(token)
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload  # preciso retornar um valor - nao pode ser true ou false
     except JWTError:
