@@ -4,19 +4,20 @@ from fastapi.responses import StreamingResponse
 from pathlib import Path
 from typing import List
 from uuid import UUID
+import asyncio
 import httpx
 import json
 import os
 
-from chat.chat_db import insert_mensagem_db, get_mensagens_db
 from db.models.chat_model import Chat, Mensagem, Role
-from graph.services.generator import gera_grafico
+from graph.services.generator import graph_generator
 from lib.default_constants import tempDf
 
 load_dotenv()
 OLLAMA_URL = os.getenv("OLLAMA_URL")
 
 
+# ================ GET
 async def get_chat_service(chat_id: str):
     chat_id_uuid = UUID(chat_id)
     chat = await Chat.filter(id=chat_id_uuid).first()
@@ -36,66 +37,7 @@ async def get_user_chats_service(user_id: str):
     return chats
 
 
-async def start_chat_service(prompt: str, sessionId: str):
-    try:
-        if sessionId is None:
-            return {"error": f"SessionId inválido"}
-
-        chat_id = await verify_chat_service(sessionId)
-
-        if chat_id is not None:
-            generator = manager(prompt, sessionId, chat_id)
-            return StreamingResponse(generator, media_type="text/event-stream")
-
-        return {"error": f"Erro ao iniciar chat: {str(e)}"}
-    except Exception as e:
-        return {"error": f"Erro ao iniciar chat: {str(e)}"}
-
-
-async def verify_chat_service(sessionId: str):
-    try:
-        chat = await Chat.filter(session_id=sessionId).first()
-        if not chat:
-            chat = await Chat.create(session_id=sessionId)
-        return chat.id
-
-    except Exception as e:
-        return {"error": f"Erro ao validar chat: {str(e)}"}
-
-
-async def manager(prompt: str, sessionId: str, chat_id: int):
-    try:
-        yield json.dumps({"status": "Planilha recebida, processando dados..."}) + "\n\n"
-
-        responseProcess = await process_data_service(prompt, sessionId, chat_id)
-
-        if responseProcess["error"] is not None:
-            yield json.dumps({"error": responseProcess["error"]}) + "\n\n"
-            return
-
-        if responseProcess["success"] is True:
-            colunas = responseProcess["colunas"]
-            yield json.dumps(
-                {"status": "Dados processados, gerando gráfico..."}
-            ) + "\n\n"
-        responseGraficos = await gera_grafico(colunas)
-
-        if responseGraficos["error"] is not None:
-            yield json.dumps({"error": responseGraficos["error"]}) + "\n\n"
-            return
-
-        if responseGraficos["success"] is True:
-            yield json.dumps(
-                {"status": "Gráfico gerado com sucesso!"}, {"success": True}
-            ) + "\n\n"
-            yield json.dumps({"graphValues": responseGraficos["graphValues"]}) + "\n\n"
-            return
-
-    except Exception as e:
-        yield json.dumps({"error": f"Erro gerenciar: {str(e)}"}) + "\n\n"
-        return
-
-
+# ================ POST/PUT
 async def upload_spreadsheet_service(worksheetRange: List[str], user_id: str):
     try:
         if worksheetRange is None:
@@ -151,10 +93,60 @@ async def upload_spreadsheet_service(worksheetRange: List[str], user_id: str):
         return {"error": f"Erro ao ler o arquivo: {str(e)}"}
 
 
-async def process_data_service(prompt: str, sessionId: str, chat_id: int):
-    path = Path(f"{tempDf}{sessionId}.txt")
-    path = path.resolve()
+async def start_chat_service(prompt: str, chat_id: str):
+    try:
+        if chat_id is None:
+            return {"error": f"Id do chat inválido"}
 
+        generator = manager(prompt, chat_id)
+        return StreamingResponse(generator, media_type="text/event-stream")
+
+    except Exception as e:
+        return {"error": f"Erro ao iniciar chat: {str(e)}"}
+
+
+async def manager(prompt: str, chat_id: int):
+    try:
+        yield json.dumps({"status": "Planilha recebida, processando dados..."}) + "\n\n"
+
+        # delay fake pra simular network ruim
+        await asyncio.sleep(2)
+
+        responseProcess = await process_data_service(prompt, chat_id)
+
+        print(responseProcess)
+
+        if responseProcess["error"] is not None:
+            yield json.dumps({"error": responseProcess["error"]}) + "\n\n"
+            return
+
+        if responseProcess["success"] is True:
+            columns = responseProcess["columns"]
+            yield json.dumps(
+                {"status": "Dados processados, gerando gráfico..."}
+            ) + "\n\n"
+
+        # delay fake pra simular network ruim
+        await asyncio.sleep(3)
+
+        columns = responseProcess["columns"]
+        message = responseProcess["message"]
+        yield json.dumps(
+            {
+                "status": "Gráfico gerado com sucesso!",
+                "message": message,
+                "columns": columns,
+            }
+        ) + "\n\n"
+
+    except Exception as e:
+        yield json.dumps({"error": f"Erro gerenciar: {str(e)}"}) + "\n\n"
+        return
+
+
+async def process_data_service(userPrompt: str, chat_id: int):
+    path = Path(f"{tempDf}{chat_id}.txt")
+    path = path.resolve()
     if path.exists() is False:
         return {
             "error": "Planilha nao encontrada.",
@@ -166,64 +158,97 @@ async def process_data_service(prompt: str, sessionId: str, chat_id: int):
 
     # Prompt
     prompt = f"""
-    prompt: {prompt}
+    system: 
+    TASK: Voce precisa analisar a "Tabela" e retornar as colunas X e Y para eu gerar um grafico em cima disso.
+    FORMAT: Retorne APENAS um JSON (nada mais alem do json) com o seguinte estritamente o seguinte formato:
+    \"{{
+        \\\"message\\\": \\\"Titulo do grafico aqui\\\",
+        \\\"columns\\\": [
+            {{
+                \\\"x\\\": [\\\"valor1\\\", \\\"valor2\\\", \\\"valor3\\\"],
+                \\\"y\\\": [\\\"valorA\\\", \\\"valorB\\\", \\\"valorC\\\"]
+            }}
+        ]
+    }}\"
+    EXAMPLE: 
+    \"exemploColumn = [
+        {{ x: valor X, y: valor do Y }},
+        {{ x: valor X, y: valor do Y }},
+        {{ x: valor X, y: valor do Y }}
+    ]\"
+
+    prompt: {userPrompt}
     
     Tabela:
     {userTable}
     """
 
     # History
-    total, rows = await get_mensagens_db(chat_id)
+    messages = await Mensagem.filter(chat_id=chat_id).order_by("-created_at").limit(10)
 
-    if rows:
-        chat_history = [dict(row) for row in rows]
-    else:
-        chat_history = []
+    chat_history = []
+    if messages:
+        for msg in messages:
+            chat_history.append({"role": str(msg.role.value), "content": msg.content})
 
+    # Add msg to history
     mensagem_dict = {"role": "user", "content": prompt}
     chat_history.append(mensagem_dict)
-    await insert_mensagem_db(chat_id, json.dumps(mensagem_dict))
+
+    await Mensagem.create(chat_id=UUID(chat_id), role=Role.user, content=userPrompt)
 
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
-            res = await client.post(
+            async with client.stream(
+                "POST",
                 OLLAMA_URL,
                 json={
                     "model": "llama3:8b",
                     "messages": chat_history,
                     "stream": True,
                 },
-            )
-            data = res.json()
-            print(data)
-        response = data.get("message", {}).get("content", "")
-    except Exception:
+            ) as response:
+                full_response = ""
+                async for line in response.aiter_lines():
+                    if line.strip():
+                        data = json.loads(line)
+                        content = data.get("message", {}).get("content", "")
+                        full_response += content
+
+        response = full_response
+    except Exception as e:
+        print("Erro llama", e)
         return {
             "error": "Erro conexão com llama",
             "success": False,
         }
 
-    print(response)
     try:
-        colunas = json.loads(response)
-    except Exception:
+        print("Resposta:", response)
+        parsed = json.loads(response)
+        print("PARSED: ", parsed)
+        message = parsed["message"]
+        columns = parsed["columns"]
+    except Exception as e:
+        print("Error response loads do llama: ", e)
         return {
-            "error": "Não foi possível interpretar as colunas retornadas pela IA",
-            "resposta_bruta": response,
+            "error": "Não foi possível interpretar as colunas retornadas pela IA. Tente ser mais especifico.",
             "success": False,
         }
 
     # History
-    mensagem_dict = {"role": "assistant", "content": response}
-    resposta = json.dumps(mensagem_dict)
-    await insert_mensagem_db(chat_id, resposta)
+    mensagem_dict = {"role": "assistant", "content": message}
+    await Mensagem.create(chat_id=UUID(chat_id), role=Role.assistant, content=response)
 
     return {
         "success": True,
-        "colunas": colunas,
+        "error": None,
+        "message": message,
+        "columns": columns,
     }
 
 
+# ================ POST/PUT
 async def delete_chat_service(chat_id: str):
     path = Path(f"{tempDf}{chat_id}.txt")
     path = path.resolve()

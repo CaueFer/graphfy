@@ -1,0 +1,1 @@
+Usuário, PIN, Restrito, Nome completo, Email, Departamento, 91995949, 91755, N, RENATO RIBAS VAZ, , VM_ADM - Administrativo, 1903674905, 63767, N, LUIZ FERNANDO DILL, compras.posigraf@positivo.com.br, PG_ADM - Suprimentos

@@ -8,6 +8,7 @@ from chat.chat_services import (
     get_chat_messages_service,
     get_user_chats_service,
     delete_chat_service,
+    start_chat_service,
 )
 from lib.helpers.jwt_helper import verify_token, verify_token_from_http
 
@@ -72,16 +73,16 @@ async def upload_spreadsheet(request: Request):
 
 class ChatStreamRequest(BaseModel):
     prompt: str
-    sessionId: str
+    chat_id: str
 
 
 @chatRouter.post("/start-chat")
 async def start_chat(body: ChatStreamRequest):
     try:
         prompt = body.prompt
-        sessionId = body.sessionId
+        chat_id = body.chat_id
 
-        return await start_chat_service(prompt, sessionId)
+        return await start_chat_service(prompt, chat_id)
     except Exception as e:
         return {"error": f"Erro ao iniciar chat: {str(e)}"}
 
