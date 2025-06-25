@@ -109,8 +109,8 @@ async def manager(prompt: str, chat_id: int):
     try:
         yield json.dumps({"status": "Planilha recebida, processando dados..."}) + "\n\n"
 
-        # delay fake pra simular network ruim
-        await asyncio.sleep(2)
+        # delay fake
+        await asyncio.sleep(3)
 
         responseProcess = await process_data_service(prompt, chat_id)
 
@@ -126,19 +126,20 @@ async def manager(prompt: str, chat_id: int):
                 {"status": "Dados processados, gerando gráfico..."}
             ) + "\n\n"
 
-        # delay fake pra simular network ruim
+        # delay fake
         await asyncio.sleep(3)
 
+        graphTitle = responseProcess["graphTitle"]
         columns = responseProcess["columns"]
         message = responseProcess["message"]
         yield json.dumps(
             {
                 "status": "Gráfico gerado com sucesso!",
                 "message": message,
+                "graphTitle": graphTitle,
                 "columns": columns,
             }
         ) + "\n\n"
-
     except Exception as e:
         yield json.dumps({"error": f"Erro gerenciar: {str(e)}"}) + "\n\n"
         return
@@ -159,22 +160,25 @@ async def process_data_service(userPrompt: str, chat_id: int):
     # Prompt
     prompt = f"""
     system: 
-    TASK: Voce precisa analisar a "Tabela" e retornar as colunas X e Y para eu gerar um grafico em cima disso.
-    FORMAT: Retorne APENAS um JSON (nada mais alem do json) com o seguinte estritamente o seguinte formato:
-    \"{{
-        \\\"message\\\": \\\"Titulo do grafico aqui\\\",
+    TASK: Voce precisa analisar a "Tabela" e retornar as colunas X e Y para eu gerar um grafico a partir disso.
+
+    Retorne APENAS um JSON (nada mais alem do json) com estritamente o seguinte formato, seguir exatamente este formato. (CADA X PRECISA SER UM OBJETO NOVO DENTRO DE COLUMNS, Y SEMPRE PRECISAR SER UM NUMERO):
+    FORMAT:(\"{{
+        \\\"title\\\": \\\"Titulo do grafico aqui\\\",
+        \\\"message\\\": \\\"Resumo do que o grafico esta mostrando (max de 5 palavras)\\\",
         \\\"columns\\\": [
             {{
-                \\\"x\\\": [\\\"valor1\\\", \\\"valor2\\\", \\\"valor3\\\"],
-                \\\"y\\\": [\\\"valorA\\\", \\\"valorB\\\", \\\"valorC\\\"]
+                \\\"x\\\": \\\"valor do x1\\\",
+                \\\"y\\\": \\\"numero do y1\\\",
             }}
         ]
-    }}\"
+    }}\")
+
     EXAMPLE: 
     \"exemploColumn = [
-        {{ x: valor X, y: valor do Y }},
-        {{ x: valor X, y: valor do Y }},
-        {{ x: valor X, y: valor do Y }}
+        {{ x: valor X, y: valor do Y, y: outro valor de Y, y: fazer assim para todos os valores de Y }},
+        {{ x: valor X, y: valor do Y, y: outro valor de Y, y: fazer assim para todos os valores de Y }},
+        {{ x: valor X, y: valor do Y, y: outro valor de Y, y: fazer assim para todos os valores de Y }}
     ]\"
 
     prompt: {userPrompt}
@@ -197,6 +201,7 @@ async def process_data_service(userPrompt: str, chat_id: int):
 
     await Mensagem.create(chat_id=UUID(chat_id), role=Role.user, content=userPrompt)
 
+    # Receive llama response
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             async with client.stream(
@@ -224,9 +229,11 @@ async def process_data_service(userPrompt: str, chat_id: int):
         }
 
     try:
-        print("Resposta:", response)
+        print(response)
         parsed = json.loads(response)
-        print("PARSED: ", parsed)
+        print(parsed)
+
+        graphTitle = parsed["title"]
         message = parsed["message"]
         columns = parsed["columns"]
     except Exception as e:
@@ -244,6 +251,7 @@ async def process_data_service(userPrompt: str, chat_id: int):
         "success": True,
         "error": None,
         "message": message,
+        "graphTitle": graphTitle,
         "columns": columns,
     }
 
