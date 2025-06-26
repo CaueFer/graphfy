@@ -1,4 +1,4 @@
-async def gera_grafico(colunas: list[str]):
+async def graph_generator(colunas: list[str]):
     try:
         print(colunas)
         return {"success": True, "graphValues": colunas}

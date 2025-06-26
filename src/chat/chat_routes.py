@@ -1,0 +1,138 @@
+from fastapi import APIRouter, HTTPException, status, Depends, Request, Query
+from pydantic import BaseModel
+from typing import List
+
+from chat.chat_services import (
+    upload_spreadsheet_service,
+    get_chat_service,
+    get_chat_messages_service,
+    get_user_chats_service,
+    delete_chat_service,
+    start_chat_service,
+)
+from lib.helpers.jwt_helper import verify_token, verify_token_from_http
+
+chatRouter = APIRouter(dependencies=[Depends(verify_token_from_http)])
+
+
+# ========== GET
+class GetUserChatsRequest(BaseModel):
+    user_id: str
+
+
+@chatRouter.get("/get-user-chats")
+async def get_user_chats(request: GetUserChatsRequest = Depends()):
+    try:
+        user_id = request.user_id
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Id do usuário inválido.",
+            )
+        chats = await get_user_chats_service(user_id)
+
+        return {"chats": chats}
+    except Exception as e:
+        print("Erro em getUserChats: ", e)
+        return {"error": f"Erro em receber mensagens do chat."}
+
+
+# ========== POST
+# UPLOAD SPREADSHEET
+class UploadSpreadsheetRequest(BaseModel):
+    worksheetRange: List[str]
+
+
+@chatRouter.post("/upload-spreadsheet")
+async def upload_spreadsheet(request: Request):
+    try:
+        auth_header = request.headers.get("authorization")
+
+        if not auth_header or not auth_header.startswith("Bearer "):
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        token = auth_header.split(" ")[1]
+        payload = verify_token(token=token)
+        if payload is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Não autorizado.",
+            )
+
+        body = await request.json()
+
+        response = await upload_spreadsheet_service(
+            worksheetRange=body["worksheetRange"], user_id=payload["user"]["id"]
+        )
+        return response
+
+    except Exception as e:
+        print(f"Erro em upload-spreadsheet: {str(e)}")
+        return {"error": f"Erro ao enviar o arquivo: {str(e)}"}
+
+
+class ChatStreamRequest(BaseModel):
+    prompt: str
+    chat_id: str
+
+
+@chatRouter.post("/start-chat")
+async def start_chat(body: ChatStreamRequest):
+    try:
+        prompt = body.prompt
+        chat_id = body.chat_id
+
+        return await start_chat_service(prompt, chat_id)
+    except Exception as e:
+        return {"error": f"Erro ao iniciar chat: {str(e)}"}
+
+
+class GetChatRequest(BaseModel):
+    chat_id: str
+
+
+@chatRouter.post("/get-chat")
+async def get_chat(body: GetChatRequest):
+    try:
+        chat_id = body.chat_id
+
+        chat = await get_chat_service(chat_id)
+
+        if chat is None:
+            return {"success": False}
+
+        return {"success": True}
+
+    except Exception as e:
+        print("Erro em inicializar chat: ", e)
+        return {"error": f"Erro em inicializar chat."}
+
+
+@chatRouter.post("/get-chat-messages")
+async def get_chat_messages(body: GetChatRequest):
+    try:
+        chat_id = body.chat_id
+
+        msgs = await get_chat_messages_service(chat_id)
+
+        return {"msgs": msgs}
+
+    except Exception as e:
+        return {"error": f"Erro em receber mensagens do chat."}
+
+
+# ========== DELETE
+@chatRouter.delete("")
+async def delete_chat(chat_id: str = Query(...)):
+    try:
+        if chat_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Id do chat inválido.",
+            )
+        await delete_chat_service(chat_id)
+
+        return {"message": "Chat deletado com sucesso!", "success": True}
+    except Exception as e:
+        print("Erro em getUserChats: ", e)
+        return {"error": f"Erro em receber mensagens do chat."}
